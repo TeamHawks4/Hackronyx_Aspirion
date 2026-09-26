@@ -1,0 +1,39 @@
+{
+  "model_type": "GradientBoostingRegressor",
+  "n_estimators": 300,
+  "max_depth": 6,
+  "features": [
+    "ndvi",
+    "ndbi",
+    "ndwi",
+    "lulc",
+    "urban_intensity",
+    "year_index"
+  ],
+  "target": "lst",
+  "metrics": {
+    "mae": 0.1002,
+    "r2": 0.9996
+  },
+  "feature_importances": {
+    "ndvi": 0.04444472188714866,
+    "ndbi": 0.9435516525453994,
+    "ndwi": 9.6880258482634e-05,
+    "lulc": 2.980664846861001e-06,
+    "urban_intensity": 0.00028184615126018654,
+    "year_index": 0.01162191849286231
+  },
+  "shap_importance": {
+    "ndvi": 0.7781,
+    "ndbi": 4.7938,
+    "ndwi": 0.0446,
+    "lulc": 0.0047,
+    "urban_intensity": 0.116,
+    "year_index": 0.6501
+  },
+  "target_range": {
+    "min": 26.220436096191406,
+    "max": 54.203392028808594
+  },
+  "disclaimer": "This model provides scenario-based estimation of Land Surface Temperature (LST) changes. LST \u2260 air temperature. Results are empirical surrogates learned from historical spatial correlations, not physical climate simulations."
+}
