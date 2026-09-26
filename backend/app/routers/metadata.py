@@ -2,7 +2,8 @@
 Metadata router — layer info, bounds, years.
 """
 
-from fastapi import APIRouter
+import json
+from fastapi import APIRouter, HTTPException
 from backend.app.config import settings
 
 router = APIRouter(prefix="/metadata", tags=["metadata"])
@@ -35,8 +36,16 @@ async def get_metadata():
         "disclaimer": (
             "Land Surface Temperature (LST) values represent surface "
             "radiometric temperature derived from satellite thermal bands. "
-            "LST ≠ air temperature. Scenario estimates are empirical "
-            "surrogates based on historical spatial correlations, not "
-            "physical climate simulations."
         ),
     }
+
+
+@router.get("/boundary")
+async def get_boundary():
+    """Return Nagpur municipal boundary GeoJSON."""
+    boundary_path = settings.VECTOR_DIR / "nagpur_boundary.geojson"
+    if not boundary_path.exists():
+        raise HTTPException(status_code=404, detail="Boundary file not found")
+    with open(boundary_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+

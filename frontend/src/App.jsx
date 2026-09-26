@@ -14,6 +14,8 @@ export default function App() {
   const [activeLayer, setActiveLayer] = useState('lst');
   const [activeYear, setActiveYear] = useState(2025);
   const [opacity, setOpacity] = useState(0.85);
+  const [basemap, setBasemap] = useState('dark');
+  const [showBoundary, setShowBoundary] = useState(true);
 
   const [clickedCoord, setClickedCoord] = useState(null);
   const [pointData, setPointData] = useState(null);
@@ -63,6 +65,8 @@ export default function App() {
           activeLayer={activeLayer}
           activeYear={activeYear}
           opacity={opacity}
+          basemap={basemap}
+          showBoundary={showBoundary}
           onMapClick={handleMapClick}
           clickedCoord={clickedCoord}
         />
@@ -74,6 +78,10 @@ export default function App() {
             onSelectLayer={setActiveLayer}
             opacity={opacity}
             onChangeOpacity={setOpacity}
+            basemap={basemap}
+            onChangeBasemap={setBasemap}
+            showBoundary={showBoundary}
+            onToggleBoundary={setShowBoundary}
           />
         </aside>
 

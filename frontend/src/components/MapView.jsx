@@ -10,7 +10,27 @@ const STUDY_BOUNDS = [
   [78.95, 21.04], // bottom-left
 ];
 
-export default function MapView({ activeLayer, activeYear, opacity, onMapClick, clickedCoord }) {
+const BASEMAP_TILES = {
+  dark: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+  satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  streets: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+};
+
+const BASEMAP_ATTRIBUTIONS = {
+  dark: '&copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+  satellite: '&copy; Esri &mdash; Earthstar Geographics',
+  streets: '&copy; OpenStreetMap contributors',
+};
+
+export default function MapView({
+  activeLayer,
+  activeYear,
+  opacity,
+  basemap = 'dark',
+  showBoundary = true,
+  onMapClick,
+  clickedCoord,
+}) {
   const mapContainerRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
@@ -24,20 +44,18 @@ export default function MapView({ activeLayer, activeYear, opacity, onMapClick, 
       style: {
         version: 8,
         sources: {
-          osm: {
+          'base-tiles': {
             type: 'raster',
-            tiles: [
-              'https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png',
-            ],
+            tiles: [BASEMAP_TILES[basemap] || BASEMAP_TILES.dark],
             tileSize: 256,
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            attribution: BASEMAP_ATTRIBUTIONS[basemap] || BASEMAP_ATTRIBUTIONS.dark,
           },
         },
         layers: [
           {
-            id: 'osm-tiles',
+            id: 'base-tiles-layer',
             type: 'raster',
-            source: 'osm',
+            source: 'base-tiles',
             minzoom: 0,
             maxzoom: 19,
           },
@@ -48,10 +66,11 @@ export default function MapView({ activeLayer, activeYear, opacity, onMapClick, 
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
 
     map.on('load', () => {
-      // Add initial layer image source
-      const initialUrl = getLayerImageUrl(activeLayer, activeYear, opacity);
+      // 1. Add UHI Raster Image source & layer
+      const initialUrl = getLayerImageUrl(activeLayer, activeYear, 1.0);
       map.addSource('uhi-raster-source', {
         type: 'image',
         url: initialUrl,
@@ -65,6 +84,57 @@ export default function MapView({ activeLayer, activeYear, opacity, onMapClick, 
         paint: {
           'raster-opacity': opacity,
           'raster-resampling': 'linear',
+        },
+      });
+
+      // 2. Add Reference labels (so city names appear legibly over raster)
+      map.addSource('reference-labels-source', {
+        type: 'raster',
+        tiles: [
+          'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+        ],
+        tileSize: 256,
+      });
+
+      map.addLayer({
+        id: 'reference-labels-layer',
+        type: 'raster',
+        source: 'reference-labels-source',
+        minzoom: 0,
+        maxzoom: 19,
+        paint: {
+          'raster-opacity': 0.85,
+        },
+      });
+
+      // 3. Add Nagpur Municipal Boundary GeoJSON overlay
+      map.addSource('nagpur-boundary-source', {
+        type: 'geojson',
+        data: '/api/metadata/boundary',
+      });
+
+      // Boundary line glow
+      map.addLayer({
+        id: 'nagpur-boundary-glow',
+        type: 'line',
+        source: 'nagpur-boundary-source',
+        paint: {
+          'line-color': '#0284c7',
+          'line-width': 5,
+          'line-opacity': 0.5,
+          'line-blur': 3,
+        },
+      });
+
+      // Boundary line stroke
+      map.addLayer({
+        id: 'nagpur-boundary-line',
+        type: 'line',
+        source: 'nagpur-boundary-source',
+        paint: {
+          'line-color': '#38bdf8',
+          'line-width': 2,
+          'line-dasharray': [3, 2],
         },
       });
     });
@@ -83,25 +153,69 @@ export default function MapView({ activeLayer, activeYear, opacity, onMapClick, 
     };
   }, []);
 
-  // Update raster layer when activeLayer, activeYear, or opacity changes
+  // Update Basemap when basemap selection changes
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    const newUrl = getLayerImageUrl(activeLayer, activeYear, opacity);
+    const source = map.getSource('base-tiles');
+    if (source && source.setTiles) {
+      source.setTiles([BASEMAP_TILES[basemap] || BASEMAP_TILES.dark]);
+    }
+
+    // Toggle reference labels depending on basemap
+    if (map.getLayer('reference-labels-layer')) {
+      map.setLayoutProperty(
+        'reference-labels-layer',
+        'visibility',
+        basemap === 'dark' ? 'visible' : 'none'
+      );
+    }
+  }, [basemap]);
+
+  // Toggle boundary visibility
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const vis = showBoundary ? 'visible' : 'none';
+    if (map.getLayer('nagpur-boundary-line')) {
+      map.setLayoutProperty('nagpur-boundary-line', 'visibility', vis);
+    }
+    if (map.getLayer('nagpur-boundary-glow')) {
+      map.setLayoutProperty('nagpur-boundary-glow', 'visibility', vis);
+    }
+  }, [showBoundary]);
+
+  // Update raster image only when activeLayer or activeYear changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const newUrl = getLayerImageUrl(activeLayer, activeYear, 1.0);
     const source = map.getSource('uhi-raster-source');
 
     if (source) {
-      source.updateImage({
-        url: newUrl,
-        coordinates: STUDY_BOUNDS,
-      });
+      try {
+        source.updateImage({
+          url: newUrl,
+          coordinates: STUDY_BOUNDS,
+        });
+      } catch (err) {
+        console.warn('Failed to update layer image:', err);
+      }
     }
+  }, [activeLayer, activeYear]);
+
+  // Adjust layer opacity instantaneously via WebGL
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
 
     if (map.getLayer('uhi-raster-layer')) {
       map.setPaintProperty('uhi-raster-layer', 'raster-opacity', opacity);
     }
-  }, [activeLayer, activeYear, opacity]);
+  }, [opacity]);
 
   // Update marker on click
   useEffect(() => {
